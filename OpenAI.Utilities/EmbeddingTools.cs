@@ -49,7 +49,7 @@ public interface IEmbeddingToolsAdvanced
     /// <summary>
     ///     Writes the provided data to a CSV file at the specified file path.
     /// </summary>
-    Task WriteToTempCsv(IEnumerable<TextEmbeddingData> textEmbeddingData, string outputFilePath);
+    Task<string> WriteToTempCsv(IEnumerable<TextEmbeddingData> textEmbeddingData, string outputFilePath);
 
     void ClearTempCsv(string outputFilePath);
 
@@ -208,14 +208,15 @@ public class EmbeddingTools : IEmbeddingTools, IEmbeddingToolsAdvanced
     /// <summary>
     ///     Writes the provided data to a CSV file at the specified file path.
     /// </summary>
-    public async Task WriteToTempCsv(IEnumerable<TextEmbeddingData> textEmbeddingData, string outputFilePath)
+    public async Task<string> WriteToTempCsv(IEnumerable<TextEmbeddingData> textEmbeddingData, string outputFilePath)
     {
-        outputFilePath = Path.Combine(Path.GetTempPath(), outputFilePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(outputFilePath) ?? string.Empty);
-        await using var writer = new StreamWriter(outputFilePath);
+        var tempFilePath = Path.Combine(Path.GetTempPath(), outputFilePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(tempFilePath) ?? string.Empty);
+        await using var writer = new StreamWriter(tempFilePath);
         await using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture);
         await csv.WriteRecordsAsync((IEnumerable) textEmbeddingData);
         await csv.DisposeAsync();
+        return tempFilePath;
     }
 
     public void ClearTempCsv(string outputFilePath)
@@ -314,9 +315,9 @@ public class EmbeddingTools : IEmbeddingTools, IEmbeddingToolsAdvanced
     /// </summary>
     public async Task<DataFrame> PerformTextEmbedding(IEnumerable<TextEmbeddingData> textEmbeddingData, string outputFilePath)
     {
-        await WriteToTempCsv(textEmbeddingData, outputFilePath);
+      var tempFilePath =  await WriteToTempCsv(textEmbeddingData, outputFilePath);
 
-        var df = ReadAndSplitData(outputFilePath);
+        var df = ReadAndSplitData(tempFilePath);
         var dfTextList = new List<string>();
         for (var i = 0; i < df.Rows.Count; i++)
         {
@@ -326,7 +327,7 @@ public class EmbeddingTools : IEmbeddingTools, IEmbeddingToolsAdvanced
         var embeddingResults = await GetEmbeddings(dfTextList);
         var newDf = AddEmbeddingsToDf(df, embeddingResults);
         SaveDfToCsv(newDf, outputFilePath);
-        ClearTempCsv(outputFilePath);
+        ClearTempCsv(tempFilePath);
         return newDf;
     }
 
