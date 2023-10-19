@@ -29,11 +29,13 @@ public partial class OpenAIService : ICompletionService
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
         // Continuously read the stream until the end of it
-        while (!reader.EndOfStream)
+#if NET7_0_OR_GREATER
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+#else
+        while (await reader.ReadLineAsync() is { } line)
+#endif
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            var line = await reader.ReadLineAsync();
             // Skip empty lines
             if (string.IsNullOrEmpty(line))
             {
